@@ -108,6 +108,68 @@ async def get_board(board_id: str) -> TrelloBoard:
     return await trello_client.get_board(board_id)
 
 
+@mcp.tool()
+async def process_attachment_content(attachment_id: str, card_id: str) -> dict:
+    """DESABILITADO: Processamento de conteúdo de anexos não está disponível devido a restrições de acesso.
+    
+    Args:
+        attachment_id: ID do anexo do Trello
+        card_id: ID do card que contém o anexo
+        
+    Returns:
+        Mensagem informando que a funcionalidade não está disponível
+    """
+    return {
+        "error": "FUNCIONALIDADE_DESABILITADA",
+        "message": "O processamento de conteúdo de anexos não está disponível devido a restrições de acesso da API do Trello. Use 'get_card_attachments' para obter metadados dos anexos.",
+        "attachment_id": attachment_id,
+        "card_id": card_id,
+        "available_alternative": "get_card_attachments"
+    }
+
+
+@mcp.tool()
+async def process_all_card_attachments(card_id: str) -> dict:
+    """DESABILITADO: Processamento de conteúdo de anexos não está disponível devido a restrições de acesso.
+    
+    Args:
+        card_id: ID do card do Trello
+        
+    Returns:
+        Mensagem informando que a funcionalidade não está disponível
+    """
+    return {
+        "error": "FUNCIONALIDADE_DESABILITADA",
+        "message": "O processamento de conteúdo de anexos não está disponível devido a restrições de acesso da API do Trello. Use 'get_card_attachments' para obter metadados dos anexos.",
+        "card_id": card_id,
+        "available_alternative": "get_card_attachments"
+    }
+
+
+@mcp.tool()
+async def get_card_with_processed_attachments(card_id: str) -> dict:
+    """DESABILITADO: Obtém apenas card com metadados dos anexos (sem processamento de conteúdo).
+    
+    Args:
+        card_id: ID do card do Trello
+        
+    Returns:
+        Card com metadados dos anexos (sem conteúdo processado)
+    """
+    # Obter o card
+    card = await trello_client.get_card(card_id)
+    
+    # Obter apenas metadados dos anexos
+    attachment_metadata = await trello_client.get_card_attachments(card_id)
+    
+    # Retornar card com metadados dos anexos
+    return {
+        "card": card,
+        "attachment_metadata": attachment_metadata,
+        "note": "Processamento de conteúdo de anexos desabilitado. Apenas metadados disponíveis."
+    }
+
+
 def main():
     """Main entry point."""
     mcp.run()
