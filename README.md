@@ -6,10 +6,21 @@ Um servidor MCP (Model Context Protocol) para integração com o Trello que perm
 
 - ✅ Listar todos os cards de um board
 - ✅ Obter detalhes de um card específico
-- ✅ Listar anexos de um card
+- ✅ Listar metadados de anexos de um card (nome, URL, tipo, tamanho)
 - ✅ Listar comentários de um card
 - ✅ Buscar cards por termo
 - ✅ Obter informações de um board
+
+## ⚠️ Limitações de Anexos
+
+Por restrições de segurança da API do Trello, este MCP **não faz download nem processamento do conteúdo** dos anexos. As seguintes funcionalidades estão **desabilitadas**:
+
+- ❌ Download de arquivos anexados
+- ❌ Extração de texto de PDFs
+- ❌ OCR de imagens
+- ❌ Processamento de conteúdo de anexos
+
+**Alternativa**: Use `get_card_attachments()` para obter metadados dos anexos (nome, URL, tipo MIME, tamanho).
 
 ## Configuração
 
@@ -94,10 +105,13 @@ Obtém detalhes de um card específico.
 - `cardId` (string): ID do card do Trello
 
 ### `get_card_attachments`
-Obtém todos os anexos de um card.
+Obtém metadados de todos os anexos de um card (nome, URL, tipo MIME, tamanho).
 
 **Parâmetros:**
 - `cardId` (string): ID do card do Trello
+
+**Retorna:**
+- Lista com metadados dos anexos (sem download do conteúdo)
 
 ### `get_card_comments`
 Obtém todos os comentários de um card.
@@ -117,6 +131,21 @@ Obtém informações de um board.
 
 **Parâmetros:**
 - `boardId` (string): ID do board do Trello
+
+### ❌ `process_attachment_content` (DESABILITADA)
+Função desabilitada devido a restrições da API. Retorna erro informativo.
+
+### ❌ `process_all_card_attachments` (DESABILITADA)  
+Função desabilitada devido a restrições da API. Retorna erro informativo.
+
+### `get_card_with_processed_attachments`
+Obtém card com metadados dos anexos (sem processamento de conteúdo).
+
+**Parâmetros:**
+- `cardId` (string): ID do card do Trello
+
+**Retorna:**
+- Card + metadados dos anexos (sem conteúdo processado)
 
 ## Como Obter IDs do Trello
 
@@ -188,9 +217,11 @@ Após reiniciar o Claude Desktop, você pode testar com comandos como:
 Após configurar o servidor MCP, você pode usar as ferramentas no Claude:
 
 - "Liste todos os cards do board X"
-- "Mostre os anexos do card Y"
+- "Mostre os metadados dos anexos do card Y" (apenas metadados, sem conteúdo)
 - "Busque cards que contenham 'projeto'"
 - "Quais são os comentários do card Z?"
+
+**Nota**: O MCP não consegue ler o conteúdo dos anexos, apenas seus metadados (nome, tipo, tamanho, URL).
 
 ## Tecnologias Utilizadas
 
@@ -221,7 +252,7 @@ Quando executado com uvicorn (`./run_uvicorn_venv.sh`), o servidor disponibiliza
 - `GET /redoc` - Documentação alternativa (ReDoc)
 - `POST /tools/get_board_cards` - Obter cards de um board
 - `POST /tools/get_card` - Obter detalhes de um card
-- `POST /tools/get_card_attachments` - Obter anexos de um card
+- `POST /tools/get_card_attachments` - Obter metadados de anexos de um card
 - `POST /tools/get_card_comments` - Obter comentários de um card
 - `POST /tools/search_cards` - Buscar cards
 - `POST /tools/get_board` - Obter informações de um board
@@ -233,6 +264,11 @@ Quando executado com uvicorn (`./run_uvicorn_venv.sh`), o servidor disponibiliza
 curl -X POST "http://127.0.0.1:8000/tools/get_board_cards" \
   -H "Content-Type: application/json" \
   -d '{"board_id": "SEU_BOARD_ID"}'
+
+# Obter metadados de anexos de um card
+curl -X POST "http://127.0.0.1:8000/tools/get_card_attachments" \
+  -H "Content-Type: application/json" \
+  -d '{"card_id": "SEU_CARD_ID"}'
 
 # Buscar cards
 curl -X POST "http://127.0.0.1:8000/tools/search_cards" \
