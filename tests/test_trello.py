@@ -1,6 +1,5 @@
 """Testes do cliente, dos modelos e da importação sem credenciais."""
 
-import asyncio
 import os
 import subprocess
 import sys
@@ -48,23 +47,20 @@ class ClientErrorTest(unittest.TestCase):
             self.assertIn("key=", str(request.url))
             return httpx.Response(404)
 
-        async def call() -> None:
-            client = TrelloClient(
-                TrelloCredentials(api_key=secret_key, token=secret_token)
-            )
-            await client._http.aclose()
-            client._http = httpx.AsyncClient(
-                base_url="https://api.trello.com/1",
-                params={"key": secret_key, "token": secret_token},
-                transport=httpx.MockTransport(handler),
-            )
-            try:
-                await client.get_board("a" * 24)
-            finally:
-                await client.aclose()
-
-        with self.assertRaises(TrelloAPIError) as caught:
-            asyncio.run(call())
+        client = TrelloClient(
+            TrelloCredentials(api_key=secret_key, token=secret_token)
+        )
+        client._http.close()
+        client._http = httpx.Client(
+            base_url="https://api.trello.com/1",
+            params={"key": secret_key, "token": secret_token},
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            with self.assertRaises(TrelloAPIError) as caught:
+                client.get_board("a" * 24)
+        finally:
+            client.close()
 
         message = str(caught.exception)
         self.assertEqual(caught.exception.status_code, 404)
@@ -76,15 +72,12 @@ class ClientErrorTest(unittest.TestCase):
         self.assertIsNone(caught.exception.__cause__)
 
     def test_id_invalido_nao_monta_url(self):
-        async def call() -> None:
-            client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
-            try:
-                await client.get_board("../members/me?token=vazou")
-            finally:
-                await client.aclose()
-
-        with self.assertRaises(ValueError):
-            asyncio.run(call())
+        client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+        try:
+            with self.assertRaises(ValueError):
+                client.get_board("../members/me?token=vazou")
+        finally:
+            client.close()
 
     def test_mover_card_nao_revela_credenciais(self):
         secret_key = "key-secreta-de-teste"
@@ -100,23 +93,20 @@ class ClientErrorTest(unittest.TestCase):
                 json={"message": "unauthorized"},
             )
 
-        async def call() -> None:
-            client = TrelloClient(
-                TrelloCredentials(api_key=secret_key, token=secret_token)
-            )
-            await client._http.aclose()
-            client._http = httpx.AsyncClient(
-                base_url="https://api.trello.com/1",
-                params={"key": secret_key, "token": secret_token},
-                transport=httpx.MockTransport(handler),
-            )
-            try:
-                await client.move_card(_CARD_ID, _LIST_ID, pos="top")
-            finally:
-                await client.aclose()
-
-        with self.assertRaises(TrelloAPIError) as caught:
-            asyncio.run(call())
+        client = TrelloClient(
+            TrelloCredentials(api_key=secret_key, token=secret_token)
+        )
+        client._http.close()
+        client._http = httpx.Client(
+            base_url="https://api.trello.com/1",
+            params={"key": secret_key, "token": secret_token},
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            with self.assertRaises(TrelloAPIError) as caught:
+                client.move_card(_CARD_ID, _LIST_ID, pos="top")
+        finally:
+            client.close()
 
         message = str(caught.exception)
         self.assertEqual(seen["method"], "PUT")
@@ -128,26 +118,20 @@ class ClientErrorTest(unittest.TestCase):
         self.assertNotIn(secret_token, message)
 
     def test_update_sem_texto_nao_chama_a_api(self):
-        async def call() -> None:
-            client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
-            try:
-                await client.update_card(_CARD_ID)
-            finally:
-                await client.aclose()
-
-        with self.assertRaises(ValueError):
-            asyncio.run(call())
+        client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+        try:
+            with self.assertRaises(ValueError):
+                client.update_card(_CARD_ID)
+        finally:
+            client.close()
 
     def test_comentario_vazio_nao_chama_a_api(self):
-        async def call() -> None:
-            client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
-            try:
-                await client.add_card_comment(_CARD_ID, "   ")
-            finally:
-                await client.aclose()
-
-        with self.assertRaises(ValueError):
-            asyncio.run(call())
+        client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+        try:
+            with self.assertRaises(ValueError):
+                client.add_card_comment(_CARD_ID, "   ")
+        finally:
+            client.close()
 
 
 class ImportTest(unittest.TestCase):

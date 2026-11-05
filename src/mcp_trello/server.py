@@ -47,37 +47,37 @@ def get_client() -> TrelloClient:
 
 
 @mcp.tool()
-async def get_board(board_id: TRELLO_ID) -> TrelloBoard:
+def get_board(board_id: TRELLO_ID) -> TrelloBoard:
     """Obtém nome, descrição, URL e estado de um board do Trello.
 
     Args:
         board_id: ID do board. São 24 caracteres na URL `.json` do board.
     """
-    return await get_client().get_board(board_id)
+    return get_client().get_board(board_id)
 
 
 @mcp.tool()
-async def get_board_cards(board_id: TRELLO_ID) -> list[TrelloCard]:
+def get_board_cards(board_id: TRELLO_ID) -> list[TrelloCard]:
     """Lista os cards de um board do Trello.
 
     Args:
         board_id: ID do board.
     """
-    return await get_client().get_board_cards(board_id)
+    return get_client().get_board_cards(board_id)
 
 
 @mcp.tool()
-async def get_card(card_id: TRELLO_ID) -> TrelloCard:
+def get_card(card_id: TRELLO_ID) -> TrelloCard:
     """Obtém um card do Trello.
 
     Args:
         card_id: ID longo do card, ou o ID curto de 8 caracteres da URL `/c/`.
     """
-    return await get_client().get_card(card_id)
+    return get_client().get_card(card_id)
 
 
 @mcp.tool()
-async def get_card_attachments(card_id: TRELLO_ID) -> list[TrelloAttachment]:
+def get_card_attachments(card_id: TRELLO_ID) -> list[TrelloAttachment]:
     """Lista metadados dos anexos de um card.
 
     Devolve nome, URL, tipo e tamanho. Não baixa o arquivo e não lê o conteúdo.
@@ -85,21 +85,21 @@ async def get_card_attachments(card_id: TRELLO_ID) -> list[TrelloAttachment]:
     Args:
         card_id: ID do card.
     """
-    return await get_client().get_card_attachments(card_id)
+    return get_client().get_card_attachments(card_id)
 
 
 @mcp.tool()
-async def get_card_comments(card_id: TRELLO_ID) -> list[TrelloComment]:
+def get_card_comments(card_id: TRELLO_ID) -> list[TrelloComment]:
     """Lista os comentários de um card.
 
     Args:
         card_id: ID do card.
     """
-    return await get_client().get_card_comments(card_id)
+    return get_client().get_card_comments(card_id)
 
 
 @mcp.tool()
-async def get_card_with_attachments(card_id: TRELLO_ID) -> TrelloCardWithAttachments:
+def get_card_with_attachments(card_id: TRELLO_ID) -> TrelloCardWithAttachments:
     """Obtém um card junto com os metadados dos anexos.
 
     O conteúdo dos arquivos não é baixado.
@@ -108,13 +108,13 @@ async def get_card_with_attachments(card_id: TRELLO_ID) -> TrelloCardWithAttachm
         card_id: ID do card.
     """
     client = get_client()
-    card = await client.get_card(card_id)
-    attachments = await client.get_card_attachments(card_id)
+    card = client.get_card(card_id)
+    attachments = client.get_card_attachments(card_id)
     return TrelloCardWithAttachments(card=card, attachments=attachments)
 
 
 @mcp.tool()
-async def search_cards(
+def search_cards(
     query: Annotated[str, Field(min_length=1)],
     board_ids: list[TRELLO_ID] | None = None,
 ) -> list[TrelloCard]:
@@ -124,11 +124,11 @@ async def search_cards(
         query: Texto da busca.
         board_ids: IDs dos boards que limitam a busca. Sem este argumento, a busca usa a conta inteira autorizada pelo token.
     """
-    return await get_client().search_cards(query, board_ids)
+    return get_client().search_cards(query, board_ids)
 
 
 @mcp.tool()
-async def get_board_lists(board_id: TRELLO_ID) -> list[TrelloList]:
+def get_board_lists(board_id: TRELLO_ID) -> list[TrelloList]:
     """Lista as colunas de um board.
 
     O id de cada coluna é o list_id usado por move_card.
@@ -136,11 +136,11 @@ async def get_board_lists(board_id: TRELLO_ID) -> list[TrelloList]:
     Args:
         board_id: ID do board.
     """
-    return await get_client().get_board_lists(board_id)
+    return get_client().get_board_lists(board_id)
 
 
 @mcp.tool()
-async def move_card(
+def move_card(
     card_id: TRELLO_ID,
     list_id: TRELLO_ID,
     board_id: TRELLO_ID | None = None,
@@ -156,11 +156,11 @@ async def move_card(
         board_id: ID do board de destino, só quando o card muda de board.
         pos: Posição na coluna. top, bottom ou um número.
     """
-    return await get_client().move_card(card_id, list_id, board_id, pos)
+    return get_client().move_card(card_id, list_id, board_id, pos)
 
 
 @mcp.tool()
-async def update_card(
+def update_card(
     card_id: TRELLO_ID,
     name: Annotated[str, Field(min_length=1)] | None = None,
     desc: str | None = None,
@@ -174,11 +174,11 @@ async def update_card(
         name: Novo nome.
         desc: Nova descrição, em texto simples.
     """
-    return await get_client().update_card(card_id, name, desc)
+    return get_client().update_card(card_id, name, desc)
 
 
 @mcp.tool()
-async def add_card_comment(
+def add_card_comment(
     card_id: TRELLO_ID,
     text: Annotated[str, Field(min_length=1)],
 ) -> TrelloComment:
@@ -188,7 +188,7 @@ async def add_card_comment(
         card_id: ID do card.
         text: Texto do comentário.
     """
-    return await get_client().add_card_comment(card_id, text)
+    return get_client().add_card_comment(card_id, text)
 
 
 def main() -> None:
