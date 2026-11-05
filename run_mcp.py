@@ -1,11 +1,4 @@
-#!/usr/bin/env python3
-"""Script para executar o MCP Trello server."""
-
-import sys
-import os
-
-# Adicionar src ao Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+"""Sobe o servidor MCP em stdio."""
 
 from mcp_trello.server import main
 
