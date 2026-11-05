@@ -1,4 +1,4 @@
-"""Servidor MCP somente leitura para o Trello."""
+"""Servidor MCP para ler, mover e escrever cards no Trello."""
 
 import os
 import sys
@@ -17,6 +17,7 @@ from .types import (
     TrelloCardWithAttachments,
     TrelloComment,
     TrelloCredentials,
+    TrelloList,
 )
 
 mcp = FastMCP("MCP Trello")
@@ -124,6 +125,70 @@ async def search_cards(
         board_ids: IDs dos boards que limitam a busca. Sem este argumento, a busca usa a conta inteira autorizada pelo token.
     """
     return await get_client().search_cards(query, board_ids)
+
+
+@mcp.tool()
+async def get_board_lists(board_id: TRELLO_ID) -> list[TrelloList]:
+    """Lista as colunas de um board.
+
+    O id de cada coluna é o list_id usado por move_card.
+
+    Args:
+        board_id: ID do board.
+    """
+    return await get_client().get_board_lists(board_id)
+
+
+@mcp.tool()
+async def move_card(
+    card_id: TRELLO_ID,
+    list_id: TRELLO_ID,
+    board_id: TRELLO_ID | None = None,
+    pos: Annotated[str, Field(pattern=r"^(top|bottom|\d+(\.\d+)?)$")] | None = None,
+) -> TrelloCard:
+    """Move um card para outra coluna.
+
+    Para mudar de board, informe também o board_id de destino. pos aceita top, bottom ou um número.
+
+    Args:
+        card_id: ID do card.
+        list_id: ID da coluna de destino.
+        board_id: ID do board de destino, só quando o card muda de board.
+        pos: Posição na coluna. top, bottom ou um número.
+    """
+    return await get_client().move_card(card_id, list_id, board_id, pos)
+
+
+@mcp.tool()
+async def update_card(
+    card_id: TRELLO_ID,
+    name: Annotated[str, Field(min_length=1)] | None = None,
+    desc: str | None = None,
+) -> TrelloCard:
+    """Altera o nome e/ou a descrição de um card.
+
+    Passe ao menos um dos dois. Uma descrição vazia apaga o texto do card.
+
+    Args:
+        card_id: ID do card.
+        name: Novo nome.
+        desc: Nova descrição, em texto simples.
+    """
+    return await get_client().update_card(card_id, name, desc)
+
+
+@mcp.tool()
+async def add_card_comment(
+    card_id: TRELLO_ID,
+    text: Annotated[str, Field(min_length=1)],
+) -> TrelloComment:
+    """Escreve um comentário no card.
+
+    Args:
+        card_id: ID do card.
+        text: Texto do comentário.
+    """
+    return await get_client().add_card_comment(card_id, text)
 
 
 def main() -> None:

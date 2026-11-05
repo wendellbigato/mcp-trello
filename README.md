@@ -1,16 +1,19 @@
 # MCP Trello
 
-Servidor [MCP](https://modelcontextprotocol.io) somente leitura para o Trello. Um assistente, como o Claude Desktop ou o Cursor, pergunta em linguagem natural e o servidor consulta boards, cards, comentários e os metadados dos anexos.
+Servidor [MCP](https://modelcontextprotocol.io) para o Trello. Um assistente, como o Claude Desktop ou o Cursor, consulta boards, cards, comentários e os metadados dos anexos. Também move cards de coluna e escreve neles: nome, descrição e comentários.
 
-Ele não altera o Trello. O token pedido nesta documentação tem só permissão de leitura.
+O token pedido nesta documentação inclui leitura e escrita. Quem o tiver pode alterar os cards das contas e dos boards que você enxerga.
 
-## O que você consegue perguntar
+## O que você consegue pedir
 
 - Quais cards estão neste board?
 - O que diz este card?
 - Quais comentários ele tem?
 - Quais arquivos estão anexados, com nome, tipo e tamanho?
 - Onde aparece este termo?
+- Move este card para a coluna Fazendo.
+- Troca a descrição deste card.
+- Comenta neste card que o item foi revisado.
 
 ## O que este servidor não faz
 
@@ -65,19 +68,21 @@ Na aba **Autenticação do Trello** o app mostra dois valores. Eles não são a 
 | Secret | Ao lado da API key | Não |
 | Token | Página de autorização, no passo seguinte | Sim, em `TRELLO_TOKEN` |
 
-A API key identifica o app. O secret é uma credencial de outro fluxo e este servidor não a lê. O token é a permissão da sua conta: quem o tiver lê os boards aos quais você tem acesso.
+A API key identifica o app. O secret é uma credencial de outro fluxo e este servidor não a lê. O token é a permissão da sua conta: com escrita, quem o tiver lê e altera os cards dos boards aos quais você tem acesso.
 
 Gere uma API key nessa aba, se ainda não houver uma. Copie a key. Deixe o secret onde está.
 
-## 3. Gerar o token de leitura
+## 3. Gerar o token
 
 Abra esta URL no navegador em que você está logado no Trello. Troque `SUA_API_KEY` pela key copiada:
 
 ```text
-https://trello.com/1/authorize?expiration=never&scope=read&response_type=token&name=MCP%20Trello&key=SUA_API_KEY
+https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&name=MCP%20Trello&key=SUA_API_KEY
 ```
 
-O parâmetro `scope=read` é o que limita o acesso à leitura. Confira isso na tela antes de autorizar. Clique em **Allow**. O Trello mostra o token na página seguinte. Copie esse valor. Ele é longo e só aparece ali.
+O parâmetro `scope=read,write` libera a consulta e também mover cards, editar nome e descrição e comentar. Confira isso na tela antes de autorizar. Clique em **Allow**. O Trello mostra o token na página seguinte. Copie esse valor. Ele é longo e só aparece ali.
+
+Se você já tinha um token só de leitura, ele não serve para `move_card`, `update_card` e `add_card_comment`. Revogue o antigo e gere outro com a URL acima.
 
 `expiration=never` significa que o token vale até você revogá-lo. Para revogar, abra https://trello.com/u/my/account, desça até **Aplicativos** e use **Revogar** na linha deste app. O app em si pode continuar existindo.
 
@@ -155,14 +160,24 @@ O servidor escuta só em `127.0.0.1:8000`. O endpoint do protocolo MCP é `http:
 | `get_card_attachments` | `card_id` | Metadados dos anexos |
 | `get_card_with_attachments` | `card_id` | O card e os metadados dos anexos |
 | `search_cards` | `query`, `board_ids` opcional | Cards que casam com o texto |
+| `get_board_lists` | `board_id` | Colunas do board e o id de cada uma |
+| `move_card` | `card_id`, `list_id`, `board_id` e `pos` opcionais | Card depois da mudança de coluna |
+| `update_card` | `card_id`, `name` e `desc` opcionais | Card com o nome ou a descrição novos |
+| `add_card_comment` | `card_id`, `text` | Comentário criado |
 
 `search_cards` sem `board_ids` procura em toda a conta que o token alcança.
+
+`move_card` precisa do `list_id` da coluna de destino. Peça antes `get_board_lists`. `pos` aceita `top`, `bottom` ou um número. Para levar o card a outro board, informe também o `board_id` de destino.
+
+`update_card` altera o texto do card. Envie `name`, `desc` ou os dois. Uma descrição vazia apaga o texto. `add_card_comment` acrescenta um comentário e não mexe no nome nem na descrição.
 
 ## 10. Onde achar os IDs
 
 **Board.** Abra o board no navegador e acrescente `.json` no fim da URL. O campo `id` do JSON é o `board_id`. São 24 caracteres.
 
 **Card.** Abra o card. A URL tem a forma `https://trello.com/c/ID_CURTO/nome-do-card`. Esse `ID_CURTO` tem 8 caracteres e serve como `card_id`. O ID de 24 caracteres, quando você o tiver, também serve.
+
+**Coluna.** Use a tool `get_board_lists`. O campo `id` de cada item é o `list_id` de `move_card`.
 
 ## Solução de problemas
 
@@ -172,7 +187,9 @@ O servidor escuta só em `127.0.0.1:8000`. O endpoint do protocolo MCP é `http:
 
 **Token inválido.** O valor de `TRELLO_TOKEN` é o secret do app, ou um token que já foi revogado. Gere outro no passo 3.
 
-**Um card ou um anexo conhecido não volta.** O token só lê o que a sua conta enxerga. Confira se você é membro desse board.
+**Mover ou escrever responde 401.** O token foi gerado só com leitura. Gere outro com `scope=read,write`, como no passo 3, e troque o valor de `TRELLO_TOKEN`.
+
+**Um card ou um anexo conhecido não volta.** O token só alcança o que a sua conta enxerga. Confira se você é membro desse board.
 
 ## Licença
 

@@ -6,7 +6,7 @@ esse JSON e ignoram campos extras que o Trello acrescentar no futuro.
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 TRELLO_ID = Annotated[
     str,
@@ -26,11 +26,13 @@ class TrelloModel(BaseModel):
 
     def as_params(self) -> dict[str, str]:
         """Converte o modelo nos query params aceitos pelo httpx."""
-        return {
-            key: value
-            for key, value in self.model_dump(exclude_none=True).items()
-            if isinstance(value, str)
-        }
+        params: dict[str, str] = {}
+        for key, value in self.model_dump(exclude_none=True).items():
+            if isinstance(value, bool):
+                params[key] = "true" if value else "false"
+            elif isinstance(value, str):
+                params[key] = value
+        return params
 
 
 class TrelloId(TrelloModel):
@@ -145,6 +147,13 @@ class TrelloBoard(TrelloModel):
     closed: bool
 
 
+class TrelloList(TrelloModel):
+    id: str
+    name: str
+    closed: bool | None = None
+    pos: float | None = None
+
+
 class TrelloCardWithAttachments(TrelloModel):
     card: TrelloCard
     attachments: list[TrelloAttachment]
@@ -192,4 +201,41 @@ class SearchQuery(TrelloModel):
     def query_com_texto(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("query não pode ser vazia")
+        return value
+
+
+_CARD_POS = r"^(top|bottom|\d+(\.\d+)?)$"
+
+
+class ListQuery(TrelloModel):
+    fields: str = "id,name,closed,pos"
+
+
+class CardMoveQuery(TrelloModel):
+    idList: TRELLO_ID
+    idBoard: TRELLO_ID | None = None
+    pos: Annotated[str, Field(pattern=_CARD_POS)] | None = None
+    fields: str = _CARD_FIELDS
+
+
+class CardWriteQuery(TrelloModel):
+    name: Annotated[str, Field(min_length=1)] | None = None
+    desc: str | None = None
+    fields: str = _CARD_FIELDS
+
+    @model_validator(mode="after")
+    def tem_texto(self) -> "CardWriteQuery":
+        if self.name is None and self.desc is None:
+            raise ValueError("informe name ou desc")
+        return self
+
+
+class CardCommentQuery(TrelloModel):
+    text: Annotated[str, Field(min_length=1)]
+
+    @field_validator("text")
+    @classmethod
+    def texto_com_conteudo(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("text não pode ser vazio")
         return value

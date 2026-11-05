@@ -12,6 +12,9 @@ import httpx
 from mcp_trello.client import TrelloAPIError, TrelloClient
 from mcp_trello.types import TrelloCommentData, TrelloCredentials, TrelloLabel
 
+_CARD_ID = "a" * 24
+_LIST_ID = "b" * 24
+
 
 class TypesTest(unittest.TestCase):
     def test_label_aceita_cor_nula(self):
@@ -77,6 +80,69 @@ class ClientErrorTest(unittest.TestCase):
             client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
             try:
                 await client.get_board("../members/me?token=vazou")
+            finally:
+                await client.aclose()
+
+        with self.assertRaises(ValueError):
+            asyncio.run(call())
+
+    def test_mover_card_nao_revela_credenciais(self):
+        secret_key = "key-secreta-de-teste"
+        secret_token = "token-secreto-de-teste"
+        seen: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["method"] = request.method
+            seen["path"] = request.url.path
+            self.assertIn(f"idList={_LIST_ID}", str(request.url))
+            return httpx.Response(
+                401,
+                json={"message": "unauthorized"},
+            )
+
+        async def call() -> None:
+            client = TrelloClient(
+                TrelloCredentials(api_key=secret_key, token=secret_token)
+            )
+            await client._http.aclose()
+            client._http = httpx.AsyncClient(
+                base_url="https://api.trello.com/1",
+                params={"key": secret_key, "token": secret_token},
+                transport=httpx.MockTransport(handler),
+            )
+            try:
+                await client.move_card(_CARD_ID, _LIST_ID, pos="top")
+            finally:
+                await client.aclose()
+
+        with self.assertRaises(TrelloAPIError) as caught:
+            asyncio.run(call())
+
+        message = str(caught.exception)
+        self.assertEqual(seen["method"], "PUT")
+        self.assertEqual(seen["path"], f"/1/cards/{_CARD_ID}")
+        self.assertEqual(caught.exception.path, f"/cards/{_CARD_ID}")
+        self.assertNotIn("key=", message)
+        self.assertNotIn("token=", message)
+        self.assertNotIn(secret_key, message)
+        self.assertNotIn(secret_token, message)
+
+    def test_update_sem_texto_nao_chama_a_api(self):
+        async def call() -> None:
+            client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+            try:
+                await client.update_card(_CARD_ID)
+            finally:
+                await client.aclose()
+
+        with self.assertRaises(ValueError):
+            asyncio.run(call())
+
+    def test_comentario_vazio_nao_chama_a_api(self):
+        async def call() -> None:
+            client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+            try:
+                await client.add_card_comment(_CARD_ID, "   ")
             finally:
                 await client.aclose()
 

@@ -1,4 +1,4 @@
-"""Cliente somente leitura da API REST do Trello."""
+"""Cliente da API REST do Trello."""
 
 import httpx
 from pydantic import TypeAdapter, ValidationError
@@ -7,8 +7,12 @@ from .types import (
     AttachmentQuery,
     BoardCardsQuery,
     BoardQuery,
+    CardCommentQuery,
+    CardMoveQuery,
     CardQuery,
+    CardWriteQuery,
     CommentQuery,
+    ListQuery,
     SearchQuery,
     TrelloAPIFailure,
     TrelloAttachment,
@@ -17,6 +21,7 @@ from .types import (
     TrelloComment,
     TrelloCredentials,
     TrelloId,
+    TrelloList,
     TrelloModel,
     TrelloSearchResult,
 )
@@ -46,7 +51,7 @@ class TrelloAPIError(Exception):
 
 
 class TrelloClient:
-    """Cliente HTTP da API 1 do Trello, com escopo de leitura."""
+    """Cliente HTTP da API 1 do Trello."""
 
     def __init__(self, credentials: TrelloCredentials):
         self._http = httpx.AsyncClient(
@@ -61,11 +66,16 @@ class TrelloClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def _request(self, path: str, params: TrelloModel | None = None) -> object:
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        params: TrelloModel | None = None,
+    ) -> object:
         safe_path = path.split("?", 1)[0]
         query = params.as_params() if params is not None else None
         try:
-            response = await self._http.get(safe_path, params=query)
+            response = await self._http.request(method, safe_path, params=query)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise TrelloAPIError(exc.response.status_code, safe_path) from None
@@ -79,7 +89,7 @@ class TrelloClient:
         response_model: type[T],
         params: TrelloModel | None = None,
     ) -> T:
-        payload = await self._request(path, params)
+        payload = await self._request("GET", path, params)
         return response_model.model_validate(payload)
 
     async def _get_list[T: TrelloModel](
@@ -88,8 +98,18 @@ class TrelloClient:
         item_model: type[T],
         params: TrelloModel | None = None,
     ) -> list[T]:
-        payload = await self._request(path, params)
+        payload = await self._request("GET", path, params)
         return TypeAdapter(list[item_model]).validate_python(payload)
+
+    async def _send[T: TrelloModel](
+        self,
+        method: str,
+        path: str,
+        response_model: type[T],
+        params: TrelloModel,
+    ) -> T:
+        payload = await self._request(method, path, params)
+        return response_model.model_validate(payload)
 
     async def get_board(self, board_id: str) -> TrelloBoard:
         """Obtém nome, descrição, URL e se o board está fechado."""
@@ -144,6 +164,60 @@ class TrelloClient:
         )
         result = await self._get("/search", TrelloSearchResult, search)
         return result.cards
+
+    async def get_board_lists(self, board_id: str) -> list[TrelloList]:
+        """Lista as colunas de um board. O id de cada uma serve para mover um card."""
+        board_id = _require_id(board_id)
+        return await self._get_list(
+            f"/boards/{board_id}/lists",
+            TrelloList,
+            ListQuery(),
+        )
+
+    async def move_card(
+        self,
+        card_id: str,
+        list_id: str,
+        board_id: str | None = None,
+        pos: str | None = None,
+    ) -> TrelloCard:
+        """Move um card para outra lista. Com board_id, muda de board também."""
+        card_id = _require_id(card_id)
+        destination = _require_id(list_id)
+        target_board = _require_id(board_id) if board_id else None
+        try:
+            query = CardMoveQuery(idList=destination, idBoard=target_board, pos=pos)
+        except ValidationError:
+            raise ValueError("pos inválida") from None
+        return await self._send("PUT", f"/cards/{card_id}", TrelloCard, query)
+
+    async def update_card(
+        self,
+        card_id: str,
+        name: str | None = None,
+        desc: str | None = None,
+    ) -> TrelloCard:
+        """Altera o nome e/ou a descrição de um card."""
+        card_id = _require_id(card_id)
+        try:
+            query = CardWriteQuery(name=name, desc=desc)
+        except ValidationError:
+            raise ValueError("informe name ou desc") from None
+        return await self._send("PUT", f"/cards/{card_id}", TrelloCard, query)
+
+    async def add_card_comment(self, card_id: str, text: str) -> TrelloComment:
+        """Escreve um comentário no card."""
+        card_id = _require_id(card_id)
+        try:
+            query = CardCommentQuery(text=text)
+        except ValidationError:
+            raise ValueError("text não pode ser vazio") from None
+        return await self._send(
+            "POST",
+            f"/cards/{card_id}/actions/comments",
+            TrelloComment,
+            query,
+        )
 
 
 def _require_id(value: str) -> str:
