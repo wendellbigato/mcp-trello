@@ -2,17 +2,21 @@
 
 import os
 import sys
+from typing import Annotated
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from pydantic import Field, ValidationError
 
 from .client import TrelloClient
 from .types import (
+    TRELLO_ID,
     TrelloAttachment,
     TrelloBoard,
     TrelloCard,
     TrelloCardWithAttachments,
     TrelloComment,
+    TrelloCredentials,
 )
 
 mcp = FastMCP("MCP Trello")
@@ -29,17 +33,20 @@ def get_client() -> TrelloClient:
     global _client
     if _client is None:
         load_dotenv()
-        api_key = os.getenv("TRELLO_API_KEY")
-        token = os.getenv("TRELLO_TOKEN")
-        if not api_key or not token:
+        try:
+            credentials = TrelloCredentials(
+                api_key=os.getenv("TRELLO_API_KEY") or "",
+                token=os.getenv("TRELLO_TOKEN") or "",
+            )
+        except ValidationError:
             print(_MISSING_CREDENTIALS, file=sys.stderr)
-            raise RuntimeError(_MISSING_CREDENTIALS)
-        _client = TrelloClient(api_key, token)
+            raise RuntimeError(_MISSING_CREDENTIALS) from None
+        _client = TrelloClient(credentials)
     return _client
 
 
 @mcp.tool()
-async def get_board(board_id: str) -> TrelloBoard:
+async def get_board(board_id: TRELLO_ID) -> TrelloBoard:
     """Obtém nome, descrição, URL e estado de um board do Trello.
 
     Args:
@@ -49,7 +56,7 @@ async def get_board(board_id: str) -> TrelloBoard:
 
 
 @mcp.tool()
-async def get_board_cards(board_id: str) -> list[TrelloCard]:
+async def get_board_cards(board_id: TRELLO_ID) -> list[TrelloCard]:
     """Lista os cards de um board do Trello.
 
     Args:
@@ -59,7 +66,7 @@ async def get_board_cards(board_id: str) -> list[TrelloCard]:
 
 
 @mcp.tool()
-async def get_card(card_id: str) -> TrelloCard:
+async def get_card(card_id: TRELLO_ID) -> TrelloCard:
     """Obtém um card do Trello.
 
     Args:
@@ -69,7 +76,7 @@ async def get_card(card_id: str) -> TrelloCard:
 
 
 @mcp.tool()
-async def get_card_attachments(card_id: str) -> list[TrelloAttachment]:
+async def get_card_attachments(card_id: TRELLO_ID) -> list[TrelloAttachment]:
     """Lista metadados dos anexos de um card.
 
     Devolve nome, URL, tipo e tamanho. Não baixa o arquivo e não lê o conteúdo.
@@ -81,7 +88,7 @@ async def get_card_attachments(card_id: str) -> list[TrelloAttachment]:
 
 
 @mcp.tool()
-async def get_card_comments(card_id: str) -> list[TrelloComment]:
+async def get_card_comments(card_id: TRELLO_ID) -> list[TrelloComment]:
     """Lista os comentários de um card.
 
     Args:
@@ -91,7 +98,7 @@ async def get_card_comments(card_id: str) -> list[TrelloComment]:
 
 
 @mcp.tool()
-async def get_card_with_attachments(card_id: str) -> TrelloCardWithAttachments:
+async def get_card_with_attachments(card_id: TRELLO_ID) -> TrelloCardWithAttachments:
     """Obtém um card junto com os metadados dos anexos.
 
     O conteúdo dos arquivos não é baixado.
@@ -106,7 +113,10 @@ async def get_card_with_attachments(card_id: str) -> TrelloCardWithAttachments:
 
 
 @mcp.tool()
-async def search_cards(query: str, board_ids: list[str] | None = None) -> list[TrelloCard]:
+async def search_cards(
+    query: Annotated[str, Field(min_length=1)],
+    board_ids: list[TRELLO_ID] | None = None,
+) -> list[TrelloCard]:
     """Busca cards pelo texto do nome ou da descrição.
 
     Args:

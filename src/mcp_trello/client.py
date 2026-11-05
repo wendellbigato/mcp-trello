@@ -1,54 +1,71 @@
 """Cliente somente leitura da API REST do Trello."""
 
-import re
-from typing import Any
-
 import httpx
+from pydantic import TypeAdapter, ValidationError
 
-from .types import TrelloAttachment, TrelloBoard, TrelloCard, TrelloComment
+from .types import (
+    AttachmentQuery,
+    BoardCardsQuery,
+    BoardQuery,
+    CardQuery,
+    CommentQuery,
+    SearchQuery,
+    TrelloAPIFailure,
+    TrelloAttachment,
+    TrelloBoard,
+    TrelloCard,
+    TrelloComment,
+    TrelloCredentials,
+    TrelloId,
+    TrelloModel,
+    TrelloSearchResult,
+)
 
 _API_ROOT = "https://api.trello.com/1"
 _TIMEOUT = httpx.Timeout(30.0)
-_ID = re.compile(r"^[A-Za-z0-9]{8,32}$")
-
-_CARD_FIELDS = "id,name,desc,idBoard,idList,url,due,dueComplete,labels,badges"
-_BOARD_FIELDS = "id,name,desc,url,closed"
 
 
 class TrelloAPIError(Exception):
     """Erro da API sem a URL completa.
 
-    A key e o token viajam na query string. A mensagem fica só com o status
-    e o path, para não voltarem ao cliente MCP.
+    A key e o token viajam na query string. A mensagem sai de um modelo
+    Pydantic que guarda só o status e o path.
     """
 
     def __init__(self, status_code: int | None, path: str):
-        self.status_code = status_code
-        self.path = path.split("?", 1)[0]
-        if status_code:
-            message = f"Trello API respondeu {status_code} em {self.path}"
-        else:
-            message = f"Falha ao chamar a Trello API em {self.path}"
-        super().__init__(message)
+        self.detail = TrelloAPIFailure(status_code=status_code, path=path)
+        super().__init__(self.detail.message)
+
+    @property
+    def status_code(self) -> int | None:
+        return self.detail.status_code
+
+    @property
+    def path(self) -> str:
+        return self.detail.path
 
 
 class TrelloClient:
     """Cliente HTTP da API 1 do Trello, com escopo de leitura."""
 
-    def __init__(self, api_key: str, token: str):
+    def __init__(self, credentials: TrelloCredentials):
         self._http = httpx.AsyncClient(
             base_url=_API_ROOT,
-            params={"key": api_key, "token": token},
+            params={
+                "key": credentials.api_key,
+                "token": credentials.token,
+            },
             timeout=_TIMEOUT,
         )
 
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
+    async def _request(self, path: str, params: TrelloModel | None = None) -> object:
         safe_path = path.split("?", 1)[0]
+        query = params.as_params() if params is not None else None
         try:
-            response = await self._http.get(safe_path, params=params)
+            response = await self._http.get(safe_path, params=query)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise TrelloAPIError(exc.response.status_code, safe_path) from None
@@ -56,62 +73,60 @@ class TrelloClient:
             raise TrelloAPIError(None, safe_path) from None
         return response.json()
 
+    async def _get[T: TrelloModel](
+        self,
+        path: str,
+        response_model: type[T],
+        params: TrelloModel | None = None,
+    ) -> T:
+        payload = await self._request(path, params)
+        return response_model.model_validate(payload)
+
+    async def _get_list[T: TrelloModel](
+        self,
+        path: str,
+        item_model: type[T],
+        params: TrelloModel | None = None,
+    ) -> list[T]:
+        payload = await self._request(path, params)
+        return TypeAdapter(list[item_model]).validate_python(payload)
+
     async def get_board(self, board_id: str) -> TrelloBoard:
         """Obtém nome, descrição, URL e se o board está fechado."""
-        board_id = _require_id(board_id, "board_id")
-        payload = await self._get(f"/boards/{board_id}", {"fields": _BOARD_FIELDS})
-        return TrelloBoard.model_validate(payload)
+        board_id = _require_id(board_id)
+        return await self._get(f"/boards/{board_id}", TrelloBoard, BoardQuery())
 
     async def get_board_cards(self, board_id: str) -> list[TrelloCard]:
-        """Obtém os cards abertos de um board."""
-        board_id = _require_id(board_id, "board_id")
-        payload = await self._get(
+        """Obtém os cards de um board."""
+        board_id = _require_id(board_id)
+        return await self._get_list(
             f"/boards/{board_id}/cards",
-            {
-                "fields": _CARD_FIELDS,
-                "attachments": "true",
-                "attachment_fields": "id,name,url,bytes,date",
-            },
+            TrelloCard,
+            BoardCardsQuery(),
         )
-        return [TrelloCard.model_validate(card) for card in payload]
 
     async def get_card(self, card_id: str) -> TrelloCard:
         """Obtém um card."""
-        card_id = _require_id(card_id, "card_id")
-        payload = await self._get(
-            f"/cards/{card_id}",
-            {
-                "fields": _CARD_FIELDS,
-                "attachments": "true",
-                "attachment_fields": "id,name,url,bytes,date",
-            },
-        )
-        return TrelloCard.model_validate(payload)
+        card_id = _require_id(card_id)
+        return await self._get(f"/cards/{card_id}", TrelloCard, CardQuery())
 
     async def get_card_attachments(self, card_id: str) -> list[TrelloAttachment]:
         """Obtém metadados dos anexos. O conteúdo do arquivo não é baixado."""
-        card_id = _require_id(card_id, "card_id")
-        payload = await self._get(
+        card_id = _require_id(card_id)
+        return await self._get_list(
             f"/cards/{card_id}/attachments",
-            {
-                "fields": "id,name,url,bytes,date,edgeColor,idMember,isUpload,mimeType,previews",
-            },
+            TrelloAttachment,
+            AttachmentQuery(),
         )
-        return [TrelloAttachment.model_validate(item) for item in payload]
 
     async def get_card_comments(self, card_id: str) -> list[TrelloComment]:
         """Obtém os comentários de um card."""
-        card_id = _require_id(card_id, "card_id")
-        payload = await self._get(
+        card_id = _require_id(card_id)
+        return await self._get_list(
             f"/cards/{card_id}/actions",
-            {
-                "filter": "commentCard",
-                "fields": "id,idMemberCreator,data,date,memberCreator",
-                "memberCreator": "true",
-                "memberCreator_fields": "id,username,fullName,avatarHash",
-            },
+            TrelloComment,
+            CommentQuery(),
         )
-        return [TrelloComment.model_validate(item) for item in payload]
 
     async def search_cards(
         self,
@@ -119,23 +134,20 @@ class TrelloClient:
         board_ids: list[str] | None = None,
     ) -> list[TrelloCard]:
         """Busca cards pelo texto. Sem `board_ids`, a busca cobre a conta inteira."""
-        if not query.strip():
-            raise ValueError("query não pode ser vazia")
-
-        params = {
-            "query": query,
-            "modelTypes": "cards",
-            "card_fields": _CARD_FIELDS,
-        }
-        if board_ids:
-            params["idBoards"] = ",".join(_require_id(board_id, "board_id") for board_id in board_ids)
-
-        payload = await self._get("/search", params)
-        cards = payload.get("cards", [])
-        return [TrelloCard.model_validate(card) for card in cards]
+        search = SearchQuery(
+            query=query,
+            idBoards=(
+                ",".join(_require_id(board_id) for board_id in board_ids)
+                if board_ids
+                else None
+            ),
+        )
+        result = await self._get("/search", TrelloSearchResult, search)
+        return result.cards
 
 
-def _require_id(value: str, name: str) -> str:
-    if not _ID.fullmatch(value):
-        raise ValueError(f"{name} inválido")
-    return value
+def _require_id(value: str) -> str:
+    try:
+        return TrelloId(value=value).value
+    except ValidationError:
+        raise ValueError("id do Trello inválido") from None

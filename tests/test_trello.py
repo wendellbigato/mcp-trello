@@ -10,7 +10,7 @@ import unittest
 import httpx
 
 from mcp_trello.client import TrelloAPIError, TrelloClient
-from mcp_trello.types import TrelloLabel
+from mcp_trello.types import TrelloCommentData, TrelloCredentials, TrelloLabel
 
 
 class TypesTest(unittest.TestCase):
@@ -20,6 +20,20 @@ class TypesTest(unittest.TestCase):
         )
         self.assertIsNone(label.color)
         self.assertIsNone(label.name)
+
+    def test_comentario_tipa_o_card_embutido(self):
+        comment = TrelloCommentData.model_validate(
+            {
+                "text": "feito",
+                "card": {"id": "a" * 24, "name": "Card", "idShort": 4, "extra": True},
+                "board": {"id": "b" * 24, "name": "Board"},
+            }
+        )
+        self.assertIsNotNone(comment.card)
+        assert comment.card is not None
+        self.assertEqual(comment.card.name, "Card")
+        self.assertEqual(comment.card.idShort, 4)
+        self.assertIsNone(comment.list)
 
 
 class ClientErrorTest(unittest.TestCase):
@@ -32,7 +46,9 @@ class ClientErrorTest(unittest.TestCase):
             return httpx.Response(404)
 
         async def call() -> None:
-            client = TrelloClient(secret_key, secret_token)
+            client = TrelloClient(
+                TrelloCredentials(api_key=secret_key, token=secret_token)
+            )
             await client._http.aclose()
             client._http = httpx.AsyncClient(
                 base_url="https://api.trello.com/1",
@@ -58,7 +74,7 @@ class ClientErrorTest(unittest.TestCase):
 
     def test_id_invalido_nao_monta_url(self):
         async def call() -> None:
-            client = TrelloClient("key", "token")
+            client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
             try:
                 await client.get_board("../members/me?token=vazou")
             finally:
