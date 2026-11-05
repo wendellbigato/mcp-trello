@@ -1,178 +1,131 @@
-#!/usr/bin/env python3
-"""MCP Trello server implementation using FastMCP."""
+"""Servidor MCP somente leitura para o Trello."""
 
 import os
 import sys
-from typing import List, Optional
 
-from fastmcp import FastMCP
 from dotenv import load_dotenv
+from fastmcp import FastMCP
 
 from .client import TrelloClient
-from .types import TrelloCard, TrelloAttachment, TrelloComment, TrelloBoard
+from .types import (
+    TrelloAttachment,
+    TrelloBoard,
+    TrelloCard,
+    TrelloCardWithAttachments,
+    TrelloComment,
+)
 
-# Load environment variables
-load_dotenv()
-
-# Get Trello credentials from environment
-TRELLO_API_KEY = os.getenv("TRELLO_API_KEY")
-TRELLO_TOKEN = os.getenv("TRELLO_TOKEN")
-
-if not TRELLO_API_KEY or not TRELLO_TOKEN:
-    print("Erro: TRELLO_API_KEY e TRELLO_TOKEN são obrigatórios", file=sys.stderr)
-    sys.exit(1)
-
-# Initialize Trello client
-trello_client = TrelloClient(TRELLO_API_KEY, TRELLO_TOKEN)
-
-# Create FastMCP app
 mcp = FastMCP("MCP Trello")
 
+_client: TrelloClient | None = None
+_MISSING_CREDENTIALS = "Erro: TRELLO_API_KEY e TRELLO_TOKEN são obrigatórios"
 
-@mcp.tool()
-async def get_board_cards(board_id: str) -> List[TrelloCard]:
-    """Obtém todos os cards de um board do Trello.
-    
-    Args:
-        board_id: ID do board do Trello
-        
-    Returns:
-        Lista de cards do board
+
+def get_client() -> TrelloClient:
+    """Cria o cliente no primeiro uso.
+
+    Importar este módulo não exige credenciais e não encerra o processo.
     """
-    return await trello_client.get_board_cards(board_id)
-
-
-@mcp.tool()
-async def get_card(card_id: str) -> TrelloCard:
-    """Obtém detalhes de um card específico do Trello.
-    
-    Args:
-        card_id: ID do card do Trello
-        
-    Returns:
-        Detalhes do card
-    """
-    return await trello_client.get_card(card_id)
-
-
-@mcp.tool()
-async def get_card_attachments(card_id: str) -> List[TrelloAttachment]:
-    """Obtém todos os anexos de um card do Trello.
-    
-    Args:
-        card_id: ID do card do Trello
-        
-    Returns:
-        Lista de anexos do card
-    """
-    return await trello_client.get_card_attachments(card_id)
-
-
-@mcp.tool()
-async def get_card_comments(card_id: str) -> List[TrelloComment]:
-    """Obtém todos os comentários de um card do Trello.
-    
-    Args:
-        card_id: ID do card do Trello
-        
-    Returns:
-        Lista de comentários do card
-    """
-    return await trello_client.get_card_comments(card_id)
-
-
-@mcp.tool()
-async def search_cards(query: str, board_ids: Optional[List[str]] = None) -> List[TrelloCard]:
-    """Busca cards no Trello por termo de pesquisa.
-    
-    Args:
-        query: Termo de pesquisa para buscar cards
-        board_ids: IDs dos boards para limitar a busca (opcional)
-        
-    Returns:
-        Lista de cards encontrados
-    """
-    return await trello_client.search_cards(query, board_ids)
+    global _client
+    if _client is None:
+        load_dotenv()
+        api_key = os.getenv("TRELLO_API_KEY")
+        token = os.getenv("TRELLO_TOKEN")
+        if not api_key or not token:
+            print(_MISSING_CREDENTIALS, file=sys.stderr)
+            raise RuntimeError(_MISSING_CREDENTIALS)
+        _client = TrelloClient(api_key, token)
+    return _client
 
 
 @mcp.tool()
 async def get_board(board_id: str) -> TrelloBoard:
-    """Obtém informações de um board do Trello.
-    
+    """Obtém nome, descrição, URL e estado de um board do Trello.
+
     Args:
-        board_id: ID do board do Trello
-        
-    Returns:
-        Informações do board
+        board_id: ID do board. São 24 caracteres na URL `.json` do board.
     """
-    return await trello_client.get_board(board_id)
+    return await get_client().get_board(board_id)
 
 
 @mcp.tool()
-async def process_attachment_content(attachment_id: str, card_id: str) -> dict:
-    """DESABILITADO: Processamento de conteúdo de anexos não está disponível devido a restrições de acesso.
-    
+async def get_board_cards(board_id: str) -> list[TrelloCard]:
+    """Lista os cards de um board do Trello.
+
     Args:
-        attachment_id: ID do anexo do Trello
-        card_id: ID do card que contém o anexo
-        
-    Returns:
-        Mensagem informando que a funcionalidade não está disponível
+        board_id: ID do board.
     """
-    return {
-        "error": "FUNCIONALIDADE_DESABILITADA",
-        "message": "O processamento de conteúdo de anexos não está disponível devido a restrições de acesso da API do Trello. Use 'get_card_attachments' para obter metadados dos anexos.",
-        "attachment_id": attachment_id,
-        "card_id": card_id,
-        "available_alternative": "get_card_attachments"
-    }
+    return await get_client().get_board_cards(board_id)
 
 
 @mcp.tool()
-async def process_all_card_attachments(card_id: str) -> dict:
-    """DESABILITADO: Processamento de conteúdo de anexos não está disponível devido a restrições de acesso.
-    
+async def get_card(card_id: str) -> TrelloCard:
+    """Obtém um card do Trello.
+
     Args:
-        card_id: ID do card do Trello
-        
-    Returns:
-        Mensagem informando que a funcionalidade não está disponível
+        card_id: ID longo do card, ou o ID curto de 8 caracteres da URL `/c/`.
     """
-    return {
-        "error": "FUNCIONALIDADE_DESABILITADA",
-        "message": "O processamento de conteúdo de anexos não está disponível devido a restrições de acesso da API do Trello. Use 'get_card_attachments' para obter metadados dos anexos.",
-        "card_id": card_id,
-        "available_alternative": "get_card_attachments"
-    }
+    return await get_client().get_card(card_id)
 
 
 @mcp.tool()
-async def get_card_with_processed_attachments(card_id: str) -> dict:
-    """DESABILITADO: Obtém apenas card com metadados dos anexos (sem processamento de conteúdo).
-    
+async def get_card_attachments(card_id: str) -> list[TrelloAttachment]:
+    """Lista metadados dos anexos de um card.
+
+    Devolve nome, URL, tipo e tamanho. Não baixa o arquivo e não lê o conteúdo.
+
     Args:
-        card_id: ID do card do Trello
-        
-    Returns:
-        Card com metadados dos anexos (sem conteúdo processado)
+        card_id: ID do card.
     """
-    # Obter o card
-    card = await trello_client.get_card(card_id)
-    
-    # Obter apenas metadados dos anexos
-    attachment_metadata = await trello_client.get_card_attachments(card_id)
-    
-    # Retornar card com metadados dos anexos
-    return {
-        "card": card,
-        "attachment_metadata": attachment_metadata,
-        "note": "Processamento de conteúdo de anexos desabilitado. Apenas metadados disponíveis."
-    }
+    return await get_client().get_card_attachments(card_id)
 
 
-def main():
-    """Main entry point."""
+@mcp.tool()
+async def get_card_comments(card_id: str) -> list[TrelloComment]:
+    """Lista os comentários de um card.
+
+    Args:
+        card_id: ID do card.
+    """
+    return await get_client().get_card_comments(card_id)
+
+
+@mcp.tool()
+async def get_card_with_attachments(card_id: str) -> TrelloCardWithAttachments:
+    """Obtém um card junto com os metadados dos anexos.
+
+    O conteúdo dos arquivos não é baixado.
+
+    Args:
+        card_id: ID do card.
+    """
+    client = get_client()
+    card = await client.get_card(card_id)
+    attachments = await client.get_card_attachments(card_id)
+    return TrelloCardWithAttachments(card=card, attachments=attachments)
+
+
+@mcp.tool()
+async def search_cards(query: str, board_ids: list[str] | None = None) -> list[TrelloCard]:
+    """Busca cards pelo texto do nome ou da descrição.
+
+    Args:
+        query: Texto da busca.
+        board_ids: IDs dos boards que limitam a busca. Sem este argumento, a busca usa a conta inteira autorizada pelo token.
+    """
+    return await get_client().search_cards(query, board_ids)
+
+
+def main() -> None:
+    """Sobe o servidor no transporte stdio, usado pelo Claude Desktop e pelo Cursor."""
+    get_client()
     mcp.run()
+
+
+def main_http() -> None:
+    """Sobe o protocolo MCP em HTTP, só em 127.0.0.1:8000."""
+    get_client()
+    mcp.run(transport="http", host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":
