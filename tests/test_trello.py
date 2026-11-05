@@ -71,6 +71,63 @@ class ClientErrorTest(unittest.TestCase):
         self.assertNotIn(secret_token, message)
         self.assertIsNone(caught.exception.__cause__)
 
+    def test_lista_quadros_abertos(self):
+        seen: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["path"] = request.url.path
+            seen["filter"] = request.url.params["filter"]
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": "a" * 24,
+                        "name": "Escola",
+                        "desc": None,
+                        "url": "https://trello.com/b/abc/escola",
+                        "closed": False,
+                        "extra": True,
+                    }
+                ],
+            )
+
+        client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+        client._http.close()
+        client._http = httpx.Client(
+            base_url="https://api.trello.com/1",
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            boards = client.list_boards()
+        finally:
+            client.close()
+
+        self.assertEqual(seen["path"], "/1/members/me/boards")
+        self.assertEqual(seen["filter"], "open")
+        self.assertEqual(boards[0].name, "Escola")
+        self.assertIsNone(boards[0].desc)
+        self.assertFalse(boards[0].closed)
+
+    def test_lista_quadros_inclui_fechados(self):
+        seen: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["filter"] = request.url.params["filter"]
+            return httpx.Response(200, json=[])
+
+        client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
+        client._http.close()
+        client._http = httpx.Client(
+            base_url="https://api.trello.com/1",
+            transport=httpx.MockTransport(handler),
+        )
+        try:
+            self.assertEqual(client.list_boards(include_closed=True), [])
+        finally:
+            client.close()
+
+        self.assertEqual(seen["filter"], "all")
+
     def test_id_invalido_nao_monta_url(self):
         client = TrelloClient(TrelloCredentials(api_key="key", token="token"))
         try:

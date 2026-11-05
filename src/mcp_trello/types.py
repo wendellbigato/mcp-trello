@@ -167,6 +167,11 @@ class BoardQuery(TrelloModel):
     fields: str = _BOARD_FIELDS
 
 
+class MemberBoardsQuery(TrelloModel):
+    fields: str = _BOARD_FIELDS
+    filter: str = "open"
+
+
 class BoardCardsQuery(TrelloModel):
     fields: str = _CARD_FIELDS
     attachments: str = "true"

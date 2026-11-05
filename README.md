@@ -153,6 +153,7 @@ O servidor escuta só em `127.0.0.1:8000`. O endpoint do protocolo MCP é `http:
 
 | Tool | Parâmetros | Devolve |
 | --- | --- | --- |
+| `list_boards` | `include_closed` opcional | Quadros da conta, com o id de cada um |
 | `get_board` | `board_id` | Nome, descrição, URL e se o board está fechado |
 | `get_board_cards` | `board_id` | Cards do board |
 | `get_card` | `card_id` | Um card |
@@ -165,6 +166,8 @@ O servidor escuta só em `127.0.0.1:8000`. O endpoint do protocolo MCP é `http:
 | `update_card` | `card_id`, `name` e `desc` opcionais | Card com o nome ou a descrição novos |
 | `add_card_comment` | `card_id`, `text` | Comentário criado |
 
+`list_boards` é o caminho para descobrir os quadros sem abrir o navegador. Sem argumentos, devolve só os abertos. Com `include_closed` verdadeiro, inclui os fechados. O campo `id` de cada item é o `board_id` das outras tools.
+
 `search_cards` sem `board_ids` procura em toda a conta que o token alcança.
 
 `move_card` precisa do `list_id` da coluna de destino. Peça antes `get_board_lists`. `pos` aceita `top`, `bottom` ou um número. Para levar o card a outro board, informe também o `board_id` de destino.
@@ -173,7 +176,7 @@ O servidor escuta só em `127.0.0.1:8000`. O endpoint do protocolo MCP é `http:
 
 ## 10. Onde achar os IDs
 
-**Board.** Abra o board no navegador e acrescente `.json` no fim da URL. O campo `id` do JSON é o `board_id`. São 24 caracteres.
+**Board.** Peça `list_boards`. O campo `id` de cada quadro é o `board_id`. No navegador, o mesmo id aparece ao acrescentar `.json` no fim da URL do quadro.
 
 **Card.** Abra o card. A URL tem a forma `https://trello.com/c/ID_CURTO/nome-do-card`. Esse `ID_CURTO` tem 8 caracteres e serve como `card_id`. O ID de 24 caracteres, quando você o tiver, também serve.
 

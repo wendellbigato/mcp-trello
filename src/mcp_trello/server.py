@@ -47,6 +47,18 @@ def get_client() -> TrelloClient:
 
 
 @mcp.tool()
+def list_boards(include_closed: bool = False) -> list[TrelloBoard]:
+    """Lista os quadros da conta autorizada pelo token.
+
+    Cada item traz o id usado pelas outras tools. Por padrão devolve só quadros abertos.
+
+    Args:
+        include_closed: Quando verdadeiro, inclui quadros fechados.
+    """
+    return get_client().list_boards(include_closed)
+
+
+@mcp.tool()
 def get_board(board_id: TRELLO_ID) -> TrelloBoard:
     """Obtém nome, descrição, URL e estado de um board do Trello.
 

@@ -7,6 +7,7 @@ from .types import (
     AttachmentQuery,
     BoardCardsQuery,
     BoardQuery,
+    MemberBoardsQuery,
     CardCommentQuery,
     CardMoveQuery,
     CardQuery,
@@ -110,6 +111,14 @@ class TrelloClient:
     ) -> T:
         payload = self._request(method, path, params)
         return response_model.model_validate(payload)
+
+    def list_boards(self, include_closed: bool = False) -> list[TrelloBoard]:
+        """Lista os boards da conta do token. Por padrão, só os abertos."""
+        return self._get_list(
+            "/members/me/boards",
+            TrelloBoard,
+            MemberBoardsQuery(filter="all" if include_closed else "open"),
+        )
 
     def get_board(self, board_id: str) -> TrelloBoard:
         """Obtém nome, descrição, URL e se o board está fechado."""
